@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Fruit Clicker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+/* --- BASIC STYLES --- */
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui}
+body{background:radial-gradient(circle at top,#ffe8b5,#ffb3c1);min-height:100vh;display:flex;justify-content:center;padding:20px}
+.app{width:100%;max-width:1100px}
+header{text-align:center;margin-bottom:20px}
+header h1{font-size:2.5rem;margin-bottom:5px}
+.main{display:grid;grid-template-columns:1fr 1.4fr;gap:20px}
+@media(max-width:800px){.main{grid-template-columns:1fr}}
+.clicker,.upgrades{background:#fff9;border-radius:15px;padding:20px;box-shadow:0 10px 25px #0002}
+.main-fruit-btn{width:180px;height:180px;border-radius:50%;border:none;background:radial-gradient(circle at 30% 20%,#fff5f5,#ff4b5c);box-shadow:0 15px 30px #0004;font-size:5rem;cursor:pointer}
+.upgrades-grid{overflow-y:auto;max-height:70vh;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.upgrade-card{background:#fff;border-radius:10px;padding:10px;border:1px solid #0001;display:flex;flex-direction:column;gap:5px}
+.upgrade-card.affordable{border-color:#4caf50;box-shadow:0 0 0 1px #4caf5030}
+.upgrade-btn{padding:6px;border:none;border-radius:6px;background:#ff6f61;color:#fff;cursor:pointer}
+.upgrade-btn:disabled{opacity:.4;cursor:default}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+<h1>Fruit Clicker</h1>
+<p>Click the fruit, buy upgrades, grow your harvest.</p>
+</header>
+
+<div class="main">
+<div class="clicker">
+<div class="score-panel">
+<div>Fruits:</div>
+<div id="score" style="font-size:2rem;font-weight:700">0</div>
+</div>
+
+<button id="mainFruit" class="main-fruit-btn">🍎</button>
+
+<div style="margin-top:10px;opacity:.8">
+<span id="perClick">Per click: 1</span> •
+<span id="perSecond">Per second: 0</span>
+</div>
+</div>
+
+<div class="upgrades">
+<h2>Upgrades</h2>
+<div id="upgradesContainer" class="upgrades-grid"></div>
+</div>
+</div>
+</div>
+
+<script>
+/* -----------------------------
+   BASE FRUIT LIST (REAL FRUITS)
+   ----------------------------- */
+const baseFruits = [
+  ["🍎","Apple"],["🍏","Green Apple"],["🍌","Banana"],["🍇","Grapes"],["🍉","Watermelon"],
+  ["🍓","Strawberry"],["🍒","Cherry"],["🍑","Peach"],["🍍","Pineapple"],["🥭","Mango"],
+  ["🍋","Lemon"],["🍊","Orange"],["🍈","Melon"],["🍐","Pear"],["🥝","Kiwi"],["🥥","Coconut"],
+  ["🍅","Tomato"],["🍆","Eggplant"],["🍏","Golden Apple"],["🍋","Lime"],["🍊","Tangerine"],
+  ["🍇","Red Grapes"],["🍇","White Grapes"],["🍎","Honeycrisp"],["🍓","Wild Strawberry"],
+  ["🍒","Black Cherry"],["🍑","Nectarine"],["🍍","Sugarloaf Pineapple"],["🥭","Alphonso Mango"],
+  ["🍋","Pink Lemon"],["🍊","Blood Orange"],["🍐","Asian Pear"],["🥝","Golden Kiwi"],
+  ["🍉","Yellow Watermelon"],["🍇","Moon Grapes"],["🍎","Caramel Apple"],["🍌","Plantain"],
+  ["🍍","Baby Pineapple"],["🍑","White Peach"],["🍊","Mandarin"],["🍈","Honeydew"],
+  ["🍈","Cantaloupe"],["🍓","Garden Strawberry"],["🍒","Rainier Cherry"],["🍎","Fuji Apple"],
+  ["🍎","Gala Apple"],["🍌","Red Banana"],["🍍","Queen Pineapple"],["🥥","Young Coconut"]
+];
+
+/* -----------------------------
+   AUTO‑GENERATE 1000 FRUITS
+   ----------------------------- */
+const adjectives = [
+  "Super","Mega","Ultra","Hyper","Golden","Crystal","Shadow","Turbo",
+  "Quantum","Royal","Mystic","Prime","Ancient","Cosmic","Solar","Lunar"
+];
+
+function generateFruitList() {
+  const list = [];
+
+  // Add real fruits first
+  baseFruits.forEach(([emoji,name])=>{
+    list.push({emoji,name,desc:`A delicious ${name} that boosts your production.`});
+  });
+
+  // Generate until 1000
+  let i = 0;
+  while (list.length < 1000) {
+    const [emoji,name] = baseFruits[i % baseFruits.length];
+    const adj = adjectives[i % adjectives.length];
+    const newName = `${adj} ${name}`;
+    list.push({
+      emoji,
+      name: newName,
+      desc: `An enhanced ${name} infused with ${adj.toLowerCase()} power.`
+    });
+    i++;
+  }
+  return list;
+}
+
+const fruits = generateFruitList();
+
+/* -----------------------------
+   GAME STATE
+   ----------------------------- */
+let score = 0;
+let perClick = 1;
+let perSecond = 0;
+
+/* -----------------------------
+   BUILD UPGRADES
+   ----------------------------- */
+const upgrades = fruits.map((f,i)=>({
+  id:i,
+  emoji:f.emoji || "",
+  title:f.emoji || f.name,
+  name:f.name,
+  desc:f.desc,
+  cost:10 + i*5,
+  click:1 + Math.floor(i/12),
+  passive:i % 4 === 0 ? 1 : 0,
+  owned:0
+}));
+
+/* -----------------------------
+   DOM ELEMENTS
+   ----------------------------- */
+const scoreEl = document.getElementById("score");
+const perClickEl = document.getElementById("perClick");
+const perSecondEl = document.getElementById("perSecond");
+const upgradesContainer = document.getElementById("upgradesContainer");
+
+/* -----------------------------
+   RENDER UPGRADES
+   ----------------------------- */
+function renderUpgrades() {
+  upgradesContainer.innerHTML = "";
+  upgrades.forEach(u=>{
+    const card = document.createElement("div");
+    card.className = "upgrade-card";
+    card.dataset.id = u.id;
+
+    card.innerHTML = `
+      <div style="font-size:1.4rem">${u.title}</div>
+      <div style="font-size:.8rem;opacity:.7">${u.name}</div>
+      <div style="font-size:.8rem">${u.desc}</div>
+      <div style="font-size:.8rem;display:flex;justify-content:space-between">
+        <span>Cost: ${u.cost}</span>
+        <span>Owned: ${u.owned}</span>
+      </div>
+      <button class="upgrade-btn">Buy (+${u.click} click, +${u.passive} s)</button>
+    `;
+
+    card.querySelector("button").onclick = ()=>buyUpgrade(u.id);
+    upgradesContainer.appendChild(card);
+  });
+  updateAffordability();
+}
+
+function updateAffordability() {
+  document.querySelectorAll(".upgrade-card").forEach(card=>{
+    const u = upgrades[card.dataset.id];
+    const btn = card.querySelector("button");
+    const can = score >= u.cost;
+    btn.disabled = !can;
+    card.classList.toggle("affordable", can);
+  });
+}
+
+/* -----------------------------
+   GAME LOGIC
+   ----------------------------- */
+document.getElementById("mainFruit").onclick = ()=>{
+  score += perClick;
+  updateUI();
+};
+
+function buyUpgrade(id) {
+  const u = upgrades[id];
+  if (score < u.cost) return;
+
+  score -= u.cost;
+  u.owned++;
+  perClick += u.click;
+  perSecond += u.passive;
+  u.cost = Math.floor(u.cost * 1.25 + 1);
+
+  updateUI();
+  renderUpgrades();
+}
+
+setInterval(()=>{
+  score += perSecond;
+  updateUI();
+},1000);
+
+function updateUI() {
+  scoreEl.textContent = Math.floor(score);
+  perClickEl.textContent = `Per click: ${perClick}`;
+  perSecondEl.textContent = `Per second: ${perSecond}`;
+  updateAffordability();
+}
+
+/* -----------------------------
+   INIT
+   ----------------------------- */
+renderUpgrades();
+updateUI();
+</script>
+</body>
+</html>
